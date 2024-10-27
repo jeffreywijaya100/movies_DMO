@@ -1,0 +1,50 @@
+Import:
+
+val mov = spark.read.format("csv").option("delimiter", "\t") .load("/user/verulam_blue/data/movies.tsv")   
+movies.show(5)
+
+val movr = spark.read.format("csv").option("delimiter", "\t")
+.load("/user/verulam_blue/data/movie-ratings.tsv")
+movieratings.show
+
+Rename:
+val movie = mov.withColumnRenamed("_c0", "actor").withColumnRenamed("_c1", "title")
+.withColumnRenamed("_c2", "year")
+movie.show(5)
+
+var movierating = movr.withColumnRenamed("_c0", "rating").withColumnRenamed("_c1", "title")
+.withColumnRenamed("_c2", "year")
+movierating.show(5)
+
+Merge:
+var movie_join = movie.join(movierating, Seq("title", "year"))
+movie_join.show(5)
+
+1. 
+val count_actor = movie.groupBy("actor").count().orderBy(desc("count"))
+count_actor.show
+
+2.
+-approach 1-
+var approach1 = movierating.groupBy("year").agg(max("rating").as("ratings"))
+approach1 = approach1.join(movierating, Seq("year")).join(movie, Seq("year", "title"))
+approach1 = approach1.groupBy("year", "title", "rating").agg(collect_list("actor").as("actors"))
+approach1.orderBy('year).show
+
+-approach2-
+import org.apache.spark.sql.expressions.Window
+val joined_data = movierating.join(movie, Seq("title", "year"), "inner")
+val windows = Window.partitionBy("year").orderBy(col("rating").desc)
+val ranked_data = joined_data.withColumn("rank", dense_rank().over(windows))
+val approach2 = ranked_data.filter(col("rank") === 1).groupBy("year", "title", "rating").agg(concat_ws("; ", collect_list("actor"))
+.alias("actors")).orderBy(col("year"))
+approach2.show
+
+3. 
+val pairs = movie.as("actor1")
+  .join(movie.as("actor2"), $"actor1.title" === $"actor2.title" && $"actor1.year" === $"actor2.year" && $"actor1.actor" < $"actor2.actor")
+  .groupBy($"actor1.actor".as("actor1"), $"actor2.actor".as("actor2"))
+  .count()
+  .orderBy(desc("count"))
+
+pairs.show()
